@@ -56,13 +56,13 @@ jobs:
           - task: NuGetCommand@2
             displayName: 'NuGet package restore for Windows (ARM64)'
             inputs:
-                cmmand: 'restore'
+                command: 'restore'
                 restoreSolution: 'Photino.Native.sln'
                 feedsToUse: 'select'
 
           - task: VSBuild@1
             displayName: 'Build Windows (ARM64) native assets'
-            input:
+            inputs:
                 solution: './Photino.Native/Photino.Native.vcxproj'
                 platform: 'ARM64'
                 msbuildArchitecture: 'ARM64'
