@@ -72,7 +72,7 @@ void Photino::Register(HINSTANCE hInstance)
 
 	RegisterClassEx(&wcx);
 
-	SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE);
+	SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_UNAWARE_GDISCALED);
 }
 
 Photino::Photino(PhotinoInitParams* initParams)
@@ -168,6 +168,7 @@ Photino::Photino(PhotinoInitParams* initParams)
 
 	_transparentEnabled = initParams->Transparent;
 	_contextMenuEnabled = initParams->ContextMenuEnabled;
+	_zoomEnabled = initParams->ZoomEnabled;
 	_devToolsEnabled = initParams->DevToolsEnabled;
 	_grantBrowserPermissions = initParams->GrantBrowserPermissions;
 	_mediaAutoplayEnabled = initParams->MediaAutoplayEnabled;
@@ -567,6 +568,13 @@ void Photino::GetContextMenuEnabled(bool* enabled)
 	settings->get_AreDefaultContextMenusEnabled((BOOL*)enabled);
 }
 
+void Photino::GetZoomEnabled(bool* enabled)
+{
+    ICoreWebView2Settings* settings;
+    HRESULT r = _webviewWindow->get_Settings(&settings);
+    settings->get_IsZoomControlEnabled((BOOL*)enabled);
+}
+
 void Photino::GetDevToolsEnabled(bool* enabled)
 {
 	ICoreWebView2Settings* settings;
@@ -744,6 +752,14 @@ void Photino::SetContextMenuEnabled(bool enabled)
 	_webviewWindow->Reload();
 }
 
+void Photino::SetZoomEnabled(bool enabled)
+{
+    ICoreWebView2Settings* settings;
+    HRESULT r = _webviewWindow->get_Settings(&settings);
+    settings->put_IsZoomControlEnabled(enabled);
+    _webviewWindow->Reload();
+}
+
 void Photino::SetDevToolsEnabled(bool enabled)
 {
 	ICoreWebView2Settings* settings;
@@ -781,6 +797,11 @@ void Photino::SetFullScreen(bool fullScreen)
 		style &= (~WS_POPUP);
 	}
 	SetWindowLongPtr(_hWnd, GWL_STYLE, style);
+	if (fullScreen)
+	{
+		SetPosition(0, 0);
+		SetSize(GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
+	}
 }
 
 void Photino::SetIconFile(AutoString filename)
@@ -1146,6 +1167,9 @@ void Photino::AttachWebView()
 
 						if (_contextMenuEnabled == false)
 							SetContextMenuEnabled(false);
+
+						if (_zoomEnabled == false)
+							SetZoomEnabled(false);
 
 						if (_devToolsEnabled == false)
 							SetDevToolsEnabled(false);
