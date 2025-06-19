@@ -46,6 +46,9 @@ struct ShowMessageParams
 };
 
 
+const HBRUSH darkBrush = CreateSolidBrush(RGB(0, 0, 0));
+const HBRUSH lightBrush = CreateSolidBrush(RGB(255, 255, 255));
+
 void Photino::Register(HINSTANCE hInstance)
 {
 	InitDarkModeSupport();
@@ -62,7 +65,7 @@ void Photino::Register(HINSTANCE hInstance)
 	wcx.hInstance = hInstance;
 	wcx.hIcon = LoadIcon(hInstance, IDI_APPLICATION);
 	wcx.hCursor = LoadCursor(nullptr, IDC_ARROW);
-	wcx.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+	wcx.hbrBackground = IsDarkModeEnabled() ? darkBrush : lightBrush;
 	wcx.lpszMenuName = nullptr;
 	wcx.lpszClassName = CLASS_NAME;
 	wcx.hIconSm = LoadIcon(hInstance, IDI_APPLICATION);
@@ -110,17 +113,20 @@ Photino::Photino(PhotinoInitParams* initParams)
 	{
 		_startUrl = new wchar_t[2048];
 		if (_startUrl == NULL) exit(0);
-		AutoString wStartUrl = ToUTF16String(initParams->StartUrl);
-		wcscpy(_startUrl, wStartUrl);
+		//AutoString wStartUrl = ToUTF16String(initParams->StartUrl);	//Conversion is done in Navigate method. Don't do it twice
+		//wcscpy(_startUrl, wStartUrl);
+		wcscpy(_startUrl, initParams->StartUrl);
 	}
 
 	_startString = NULL;
 	if (initParams->StartString != NULL)
 	{
-		AutoString wStartString = ToUTF16String(initParams->StartString);
-		_startString = new wchar_t[wcslen(wStartString) + 1];
+		//AutoString wStartString = ToUTF16String(initParams->StartString);	//Conversion is done in Navigate method. Don't do it twice
+		//_startString = new wchar_t[wcslen(wStartString) + 1];
+		_startString = new wchar_t[wcslen(initParams->StartString) + 1];
 		if (_startString == NULL) exit(0);
-		wcscpy(_startString, wStartString);
+		//wcscpy(_startString, wStartString);
+		wcscpy(_startString, initParams->StartString);
 	}
 
 	_temporaryFilesPath = NULL;
@@ -130,7 +136,6 @@ Photino::Photino(PhotinoInitParams* initParams)
 		if (_temporaryFilesPath == NULL) exit(0);
 		AutoString wTemporaryFilesPath = ToUTF16String(initParams->TemporaryFilesPath);
 		wcscpy(_temporaryFilesPath, wTemporaryFilesPath);
-
 	}
 
 	_userAgent = NULL;
@@ -163,6 +168,7 @@ Photino::Photino(PhotinoInitParams* initParams)
 
 	_transparentEnabled = initParams->Transparent;
 	_contextMenuEnabled = initParams->ContextMenuEnabled;
+	_zoomEnabled = initParams->ZoomEnabled;
 	_devToolsEnabled = initParams->DevToolsEnabled;
 	_grantBrowserPermissions = initParams->GrantBrowserPermissions;
 	_mediaAutoplayEnabled = initParams->MediaAutoplayEnabled;
@@ -320,6 +326,7 @@ HWND Photino::getHwnd()
 	return _hWnd;
 }
 
+
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	switch (uMsg)
@@ -328,9 +335,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	{
 		EnableDarkMode(hwnd, true);
 		if (IsDarkModeEnabled()) 
-		{
 			RefreshNonClientArea(hwnd);
-		}
 		break;
 	}
 	case WM_DPICHANGED:
@@ -356,12 +361,38 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	{
 		if (IsColorSchemeChange(lParam))
 			SendMessageW(hwnd, WM_THEMECHANGED, 0, 0);
+
 		break;
 	}
 	case WM_THEMECHANGED:
 	{
 		EnableDarkMode(hwnd, IsDarkModeEnabled());
 		RefreshNonClientArea(hwnd);
+		InvalidateRect(hwnd, NULL, TRUE);
+		break;
+	}
+	case WM_PAINT:
+	{
+		PAINTSTRUCT ps;
+		HDC hdc = BeginPaint(hwnd, &ps);
+
+		// Fill the background with the current theme color
+		if (IsDarkModeEnabled())
+		{
+			FillRect(hdc, &ps.rcPaint, darkBrush);
+			//SetTextColor(hdc, RGB(255,255,255));
+		}
+		else
+		{
+			FillRect(hdc, &ps.rcPaint, lightBrush);
+			//SetTextColor(hdc, RGB(0, 0, 0));
+		}
+
+		// Draw some text
+		//SetBkMode(hdc, TRANSPARENT);
+		//TextOut(hdc, 10, 10, L"Hello, World! (Dynamic Theme)", 31);
+
+		EndPaint(hwnd, &ps);
 		break;
 	}
 	case WM_ACTIVATE:
@@ -388,13 +419,20 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			bool doNotClose = Photino->InvokeClose();
 
 			if (!doNotClose)
+			{
 				DestroyWindow(hwnd);
+			}
 		}
 
 		return 0;
 	}
 	case WM_DESTROY:
 	{
+		Photino* Photino = hwndToPhotino[hwnd];
+		if (Photino)
+		{
+			Photino->CloseWebView();
+		}
 		// Only terminate the message loop if the window being closed is the one that
 		// started the message loop
 		hwndToPhotino.erase(hwnd);
@@ -484,7 +522,25 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	return DefWindowProc(hwnd, uMsg, wParam, lParam);
 }
 
+void Photino::CloseWebView()
+{
+	if (_webviewController != nullptr)
+	{
+		_webviewController->Close();
+		_webviewController = nullptr;
+	}
 
+	if (_webviewWindow != nullptr)
+	{
+		_webviewWindow->Stop();
+		_webviewWindow = nullptr;
+	}
+
+	if (_webviewEnvironment != nullptr)
+	{
+		_webviewEnvironment = nullptr;
+	}
+}
 
 
 
@@ -529,6 +585,13 @@ void Photino::GetContextMenuEnabled(bool* enabled)
 	ICoreWebView2Settings* settings;
 	HRESULT r = _webviewWindow->get_Settings(&settings);
 	settings->get_AreDefaultContextMenusEnabled((BOOL*)enabled);
+}
+
+void Photino::GetZoomEnabled(bool* enabled)
+{
+    ICoreWebView2Settings* settings;
+    HRESULT r = _webviewWindow->get_Settings(&settings);
+    settings->get_IsZoomControlEnabled((BOOL*)enabled);
 }
 
 void Photino::GetDevToolsEnabled(bool* enabled)
@@ -667,11 +730,13 @@ void Photino::GetZoom(int* zoom)
 
 void Photino::NavigateToString(AutoString content)
 {
+	content = ToUTF16String(content);
 	_webviewWindow->NavigateToString(content);
 }
 
 void Photino::NavigateToUrl(AutoString url)
 {
+	url = ToUTF16String(url);
 	_webviewWindow->Navigate(url);
 }
 
@@ -706,6 +771,14 @@ void Photino::SetContextMenuEnabled(bool enabled)
 	_webviewWindow->Reload();
 }
 
+void Photino::SetZoomEnabled(bool enabled)
+{
+    ICoreWebView2Settings* settings;
+    HRESULT r = _webviewWindow->get_Settings(&settings);
+    settings->put_IsZoomControlEnabled(enabled);
+    _webviewWindow->Reload();
+}
+
 void Photino::SetDevToolsEnabled(bool enabled)
 {
 	ICoreWebView2Settings* settings;
@@ -721,8 +794,21 @@ void Photino::SetFullScreen(bool fullScreen)
 	{
 		style |= WS_POPUP;
 		style &= (~WS_OVERLAPPEDWINDOW);
-		SetPosition(0, 0);
-		SetSize(GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
+
+		HMONITOR monitor = MonitorFromWindow(_hWnd, MONITOR_DEFAULTTONEAREST);
+		MONITORINFO monitorInfo = { sizeof(monitorInfo) };
+
+		if (GetMonitorInfoW(monitor, &monitorInfo)) 
+		{
+			RECT rc = monitorInfo.rcMonitor;
+			SetPosition(rc.left, rc.top);
+			SetSize(rc.right - rc.left, rc.bottom - rc.top);
+		}
+		else
+		{
+			SetPosition(0, 0);
+			SetSize(GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
+		}
 	}
 	else
 	{
@@ -730,6 +816,11 @@ void Photino::SetFullScreen(bool fullScreen)
 		style &= (~WS_POPUP);
 	}
 	SetWindowLongPtr(_hWnd, GWL_STYLE, style);
+	if (fullScreen)
+	{
+		SetPosition(0, 0);
+		SetSize(GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
+	}
 }
 
 void Photino::SetIconFile(AutoString filename)
@@ -1095,6 +1186,9 @@ void Photino::AttachWebView()
 
 						if (_contextMenuEnabled == false)
 							SetContextMenuEnabled(false);
+
+						if (_zoomEnabled == false)
+							SetZoomEnabled(false);
 
 						if (_devToolsEnabled == false)
 							SetDevToolsEnabled(false);
