@@ -400,13 +400,20 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			bool doNotClose = Photino->InvokeClose();
 
 			if (!doNotClose)
+			{
 				DestroyWindow(hwnd);
+			}
 		}
 
 		return 0;
 	}
 	case WM_DESTROY:
 	{
+		Photino* Photino = hwndToPhotino[hwnd];
+		if (Photino)
+		{
+			Photino->CloseWebView();
+		}
 		// Only terminate the message loop if the window being closed is the one that
 		// started the message loop
 		hwndToPhotino.erase(hwnd);
@@ -496,7 +503,25 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	return DefWindowProc(hwnd, uMsg, wParam, lParam);
 }
 
+void Photino::CloseWebView()
+{
+	if (_webviewController != nullptr)
+	{
+		_webviewController->Close();
+		_webviewController = nullptr;
+	}
 
+	if (_webviewWindow != nullptr)
+	{
+		_webviewWindow->Stop();
+		_webviewWindow = nullptr;
+	}
+
+	if (_webviewEnvironment != nullptr)
+	{
+		_webviewEnvironment = nullptr;
+	}
+}
 
 
 
@@ -750,6 +775,21 @@ void Photino::SetFullScreen(bool fullScreen)
 	{
 		style |= WS_POPUP;
 		style &= (~WS_OVERLAPPEDWINDOW);
+
+		HMONITOR monitor = MonitorFromWindow(_hWnd, MONITOR_DEFAULTTONEAREST);
+		MONITORINFO monitorInfo = { sizeof(monitorInfo) };
+
+		if (GetMonitorInfoW(monitor, &monitorInfo)) 
+		{
+			RECT rc = monitorInfo.rcMonitor;
+			SetPosition(rc.left, rc.top);
+			SetSize(rc.right - rc.left, rc.bottom - rc.top);
+		}
+		else
+		{
+			SetPosition(0, 0);
+			SetSize(GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
+		}
 	}
 	else
 	{
