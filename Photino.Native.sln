@@ -14,6 +14,9 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Photino.Native", "Photino.Native\Photino.Native.vcxproj", "{B326B50A-F623-40F1-92F7-1EC6A5A48DAC}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Photino.Test", "Photino.Test\Photino.Test.csproj", "{056ABF92-CFED-4800-8439-ECFA5C55B029}"
+	ProjectSection(ProjectDependencies) = postProject
+		{B326B50A-F623-40F1-92F7-1EC6A5A48DAC} = {B326B50A-F623-40F1-92F7-1EC6A5A48DAC}
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
