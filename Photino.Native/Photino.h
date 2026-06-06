@@ -272,6 +272,7 @@ public:
 
 	void NavigateToString(AutoString content);
 	void NavigateToUrl(AutoString url);
+	bool ExecuteScript(AutoString script);
 	void Restore(); // required anymore?backward compat?
 	void SendWebMessage(AutoString message);
 

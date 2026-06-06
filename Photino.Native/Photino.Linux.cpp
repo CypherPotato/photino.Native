@@ -506,6 +506,15 @@ void Photino::NavigateToUrl(AutoString url)
 	webkit_web_view_load_uri(WEBKIT_WEB_VIEW(_webview), url);
 }
 
+bool Photino::ExecuteScript(AutoString script)
+{
+	if (!_webview)
+		return false;
+
+	webkit_web_view_run_javascript(WEBKIT_WEB_VIEW(_webview), script, NULL, NULL, NULL);
+	return true;
+}
+
 void Photino::Restore()
 {
 	gtk_window_present(GTK_WINDOW(_window));

@@ -688,6 +688,19 @@ void Photino::NavigateToUrl(AutoString url)
 	_webviewWindow->Navigate(url);
 }
 
+bool Photino::ExecuteScript(AutoString script)
+{
+	if (!_webviewWindow)
+		return false;
+
+	script = ToUTF16String(script);
+	return SUCCEEDED(_webviewWindow->ExecuteScript(script, Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
+		[](HRESULT errorCode, LPCWSTR resultObjectAsJson) -> HRESULT
+		{
+			return S_OK;
+		}).Get()));
+}
+
 void Photino::Restore()
 {
 	ShowWindow(_hWnd, SW_RESTORE);

@@ -499,6 +499,15 @@ void Photino::NavigateToUrl(AutoString url)
     [_webview loadRequest: nsrequest];
 }
 
+bool Photino::ExecuteScript(AutoString script)
+{
+    if (!_webview)
+        return false;
+
+    [_webview evaluateJavaScript: [NSString stringWithUTF8String: script] completionHandler: nil];
+    return true;
+}
+
 void Photino::Restore()
 {
     bool minimized;
