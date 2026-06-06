@@ -37,6 +37,7 @@
     <Compile Include="..\..\photino.NET\Photino.NET\PhotinoNetDelegates.cs" Link="PhotinoNetDelegates.cs" />
     <Compile Include="..\..\photino.NET\Photino.NET\PhotinoScriptExecution.cs" Link="PhotinoScriptExecution.cs" />
     <Compile Include="..\..\photino.NET\Photino.NET\PhotinoWindow.NET.cs" Link="PhotinoWindow.NET.cs" />
+    <Compile Include="..\..\photino.NET\Photino.NET\PopupRequestedEventArgs.cs" Link="PopupRequestedEventArgs.cs" />
   </ItemGroup>
 
   <ItemGroup>
