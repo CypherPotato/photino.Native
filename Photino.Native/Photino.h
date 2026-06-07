@@ -53,6 +53,7 @@ typedef bool (*ClosingCallback)();
 typedef void (*FocusInCallback)();
 typedef void (*FocusOutCallback)();
 typedef int (*InputDialogRequestedCallback)(int kind, AutoString message, AutoString defaultInput, AutoString response, int responseLength);
+typedef bool (*PopupRequestedCallback)(AutoString url, AutoString name, int x, int y, int width, int height);
 
 class PhotinoDialog;
 class Photino;
@@ -80,6 +81,7 @@ struct PhotinoInitParams
 	MovedCallback *MovedHandler;
 	WebMessageReceivedCallback *WebMessageReceivedHandler;
 	InputDialogRequestedCallback *InputDialogRequestedHandler;
+	PopupRequestedCallback *PopupRequestedHandler;
 	AutoString CustomSchemeNames[16];
 	WebResourceRequestedCallback *CustomSchemeHandler;
 
@@ -132,6 +134,7 @@ private:
 	FocusOutCallback _focusOutCallback;
 	InputDialogRequestedCallback _inputDialogRequestedCallback;
 	bool _inputDialogInterceptionEnabled;
+	PopupRequestedCallback _popupRequestedCallback;
 	std::vector<AutoString> _customSchemeNames;
 	WebResourceRequestedCallback _customSchemeCallback;
 
@@ -283,6 +286,11 @@ public:
 	int InvokeInputDialogRequested(int kind, AutoString message, AutoString defaultInput, AutoString response, int responseLength)
 	{
 		return _inputDialogRequestedCallback ? _inputDialogRequestedCallback(kind, message, defaultInput, response, responseLength) : 0;
+	}
+	bool ExecuteScript(AutoString script);
+	bool InvokePopupRequested(AutoString url, AutoString name, int x, int y, int width, int height)
+	{
+		return _popupRequestedCallback && _popupRequestedCallback(url, name, x, y, width, height);
 	}
 	void Restore(); // required anymore?backward compat?
 	void SendWebMessage(AutoString message);
