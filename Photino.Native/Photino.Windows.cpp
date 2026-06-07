@@ -45,6 +45,15 @@ struct ShowMessageParams
 	UINT type = 0;
 };
 
+struct InputPromptDialogState
+{
+	LPCWSTR message;
+	LPCWSTR defaultInput;
+	std::wstring input;
+	HWND edit;
+	bool accepted;
+};
+
 const int InputDialogKindAlert = 0;
 const int InputDialogKindConfirm = 1;
 const int InputDialogKindPrompt = 2;
@@ -52,9 +61,147 @@ const int InputDialogResultHandled = 1;
 const int InputDialogResultDismissed = 2;
 const int InputDialogResultConfirmed = 4;
 const int InputDialogResponseLength = 32768;
+const int InputPromptDialogWidth = 420;
+const int InputPromptDialogHeight = 170;
+const int InputPromptDialogEdit = 1001;
+const int InputPromptDialogOk = IDOK;
+const int InputPromptDialogCancel = IDCANCEL;
+LPCWSTR InputPromptDialogClassName = L"PhotinoInputPromptDialog";
 
 const HBRUSH darkBrush = CreateSolidBrush(RGB(0, 0, 0));
 const HBRUSH lightBrush = CreateSolidBrush(RGB(255, 255, 255));
+
+LRESULT CALLBACK InputPromptDialogProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+	auto state = reinterpret_cast<InputPromptDialogState*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
+
+	switch (uMsg)
+	{
+		case WM_NCCREATE:
+		{
+			auto createStruct = reinterpret_cast<CREATESTRUCT*>(lParam);
+			SetWindowLongPtr(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(createStruct->lpCreateParams));
+			return TRUE;
+		}
+		case WM_CREATE:
+		{
+			state = reinterpret_cast<InputPromptDialogState*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
+			HFONT font = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
+
+			HWND label = CreateWindowExW(0, L"STATIC", state->message, WS_CHILD | WS_VISIBLE | SS_LEFT, 16, 16, 372, 38, hwnd, nullptr, nullptr, nullptr);
+			SendMessage(label, WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
+
+			state->edit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", state->defaultInput, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL, 16, 62, 372, 24, hwnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(InputPromptDialogEdit)), nullptr, nullptr);
+			SendMessage(state->edit, WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
+
+			HWND okButton = CreateWindowExW(0, L"BUTTON", L"OK", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON, 224, 104, 78, 26, hwnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(InputPromptDialogOk)), nullptr, nullptr);
+			SendMessage(okButton, WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
+
+			HWND cancelButton = CreateWindowExW(0, L"BUTTON", L"Cancel", WS_CHILD | WS_VISIBLE | WS_TABSTOP, 310, 104, 78, 26, hwnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(InputPromptDialogCancel)), nullptr, nullptr);
+			SendMessage(cancelButton, WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
+
+			SetFocus(state->edit);
+			SendMessage(state->edit, EM_SETSEL, 0, -1);
+			return FALSE;
+		}
+		case WM_COMMAND:
+		{
+			switch (LOWORD(wParam))
+			{
+				case InputPromptDialogOk:
+				{
+					int length = GetWindowTextLengthW(state->edit);
+					std::vector<wchar_t> buffer(length + 1);
+					GetWindowTextW(state->edit, buffer.data(), static_cast<int>(buffer.size()));
+					state->input = buffer.data();
+					state->accepted = true;
+					DestroyWindow(hwnd);
+					return 0;
+				}
+				case InputPromptDialogCancel:
+					DestroyWindow(hwnd);
+					return 0;
+			}
+			break;
+		}
+		case WM_CLOSE:
+			DestroyWindow(hwnd);
+			return 0;
+	}
+
+	return DefWindowProc(hwnd, uMsg, wParam, lParam);
+}
+
+bool ShowInputPromptDialog(HWND owner, LPCWSTR message, LPCWSTR defaultInput, std::wstring* input)
+{
+	WNDCLASSEX wcx = {};
+	wcx.cbSize = sizeof WNDCLASSEX;
+	wcx.lpfnWndProc = InputPromptDialogProc;
+	wcx.hInstance = GetModuleHandle(nullptr);
+	wcx.hCursor = LoadCursor(nullptr, IDC_ARROW);
+	wcx.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
+	wcx.lpszClassName = InputPromptDialogClassName;
+	RegisterClassEx(&wcx);
+
+	RECT ownerRect;
+	if (owner && GetWindowRect(owner, &ownerRect))
+	{
+		int x = ownerRect.left + ((ownerRect.right - ownerRect.left) - InputPromptDialogWidth) / 2;
+		int y = ownerRect.top + ((ownerRect.bottom - ownerRect.top) - InputPromptDialogHeight) / 2;
+		ownerRect = { x, y, x + InputPromptDialogWidth, y + InputPromptDialogHeight };
+	}
+	else
+	{
+		int x = (GetSystemMetrics(SM_CXSCREEN) - InputPromptDialogWidth) / 2;
+		int y = (GetSystemMetrics(SM_CYSCREEN) - InputPromptDialogHeight) / 2;
+		ownerRect = { x, y, x + InputPromptDialogWidth, y + InputPromptDialogHeight };
+	}
+
+	InputPromptDialogState state = { message, defaultInput, L"", nullptr, false };
+	HWND hwnd = CreateWindowExW(
+		WS_EX_DLGMODALFRAME,
+		InputPromptDialogClassName,
+		L"Prompt",
+		WS_CAPTION | WS_SYSMENU | WS_POPUP,
+		ownerRect.left,
+		ownerRect.top,
+		InputPromptDialogWidth,
+		InputPromptDialogHeight,
+		owner,
+		nullptr,
+		GetModuleHandle(nullptr),
+		&state);
+
+	if (!hwnd)
+		return false;
+
+	if (owner)
+		EnableWindow(owner, FALSE);
+
+	ShowWindow(hwnd, SW_SHOW);
+	UpdateWindow(hwnd);
+
+	MSG msg;
+	while (IsWindow(hwnd) && GetMessage(&msg, nullptr, 0, 0) > 0)
+	{
+		if (!IsDialogMessage(hwnd, &msg))
+		{
+			TranslateMessage(&msg);
+			DispatchMessage(&msg);
+		}
+	}
+
+	if (owner)
+	{
+		EnableWindow(owner, TRUE);
+		SetActiveWindow(owner);
+	}
+
+	if (state.accepted)
+		*input = state.input;
+
+	return state.accepted;
+}
 
 void Photino::Register(HINSTANCE hInstance)
 {
@@ -1003,19 +1150,13 @@ void Photino::UpdateScriptDialogOpeningHandler()
 	if (!_inputDialogInterceptionEnabled)
 	{
 		Settings->put_AreDefaultScriptDialogsEnabled(TRUE);
-		if (_scriptDialogOpeningRegistered)
-		{
-			_webviewWindow->remove_ScriptDialogOpening(_scriptDialogOpeningToken);
-			_scriptDialogOpeningRegistered = false;
-			_scriptDialogOpeningToken = {};
-		}
 		return;
 	}
 
+	Settings->put_AreDefaultScriptDialogsEnabled(FALSE);
 	if (_scriptDialogOpeningRegistered)
 		return;
 
-	Settings->put_AreDefaultScriptDialogsEnabled(FALSE);
 	_webviewWindow->add_ScriptDialogOpening(Callback<ICoreWebView2ScriptDialogOpeningEventHandler>(
 		[&](ICoreWebView2* sender, ICoreWebView2ScriptDialogOpeningEventArgs* args) -> HRESULT {
 			COREWEBVIEW2_SCRIPT_DIALOG_KIND dialogKind;
@@ -1053,7 +1194,28 @@ void Photino::UpdateScriptDialogOpeningHandler()
 				InputDialogResponseLength);
 
 			if (!(inputResult & InputDialogResultHandled))
+			{
+				if (inputDialogKind == InputDialogKindAlert)
+				{
+					MessageBoxW(_hWnd, message.get() ? message.get() : L"", L"Alert", MB_OK);
+					args->Accept();
+				}
+				else if (inputDialogKind == InputDialogKindConfirm)
+				{
+					if (MessageBoxW(_hWnd, message.get() ? message.get() : L"", L"Confirm", MB_OKCANCEL) == IDOK)
+						args->Accept();
+				}
+				else if (inputDialogKind == InputDialogKindPrompt)
+				{
+					std::wstring promptResult;
+					if (ShowInputPromptDialog(_hWnd, message.get() ? message.get() : L"", defaultInput.get() ? defaultInput.get() : L"", &promptResult))
+					{
+						args->put_ResultText(promptResult.c_str());
+						args->Accept();
+					}
+				}
 				return S_OK;
+			}
 
 			if (inputDialogKind == InputDialogKindPrompt && !(inputResult & InputDialogResultDismissed))
 				args->put_ResultText(response);
