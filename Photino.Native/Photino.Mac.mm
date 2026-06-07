@@ -149,6 +149,7 @@ Photino::Photino(PhotinoInitParams* initParams)
     _maximizedCallback = (MaximizedCallback)initParams->MaximizedHandler;
 	_minimizedCallback = (MinimizedCallback)initParams->MinimizedHandler;
 	_restoredCallback = (RestoredCallback)initParams->RestoredHandler;
+	_inputDialogRequestedCallback = (InputDialogRequestedCallback)initParams->InputDialogRequestedHandler;
 	_customSchemeCallback = (WebResourceRequestedCallback)initParams->CustomSchemeHandler;
     
 

@@ -52,6 +52,7 @@ typedef void (*MovedCallback)(int x, int y);
 typedef bool (*ClosingCallback)();
 typedef void (*FocusInCallback)();
 typedef void (*FocusOutCallback)();
+typedef int (*InputDialogRequestedCallback)(int kind, AutoString message, AutoString defaultInput, AutoString response, int responseLength);
 
 class PhotinoDialog;
 class Photino;
@@ -78,6 +79,7 @@ struct PhotinoInitParams
 	MinimizedCallback *MinimizedHandler;
 	MovedCallback *MovedHandler;
 	WebMessageReceivedCallback *WebMessageReceivedHandler;
+	InputDialogRequestedCallback *InputDialogRequestedHandler;
 	AutoString CustomSchemeNames[16];
 	WebResourceRequestedCallback *CustomSchemeHandler;
 
@@ -128,6 +130,7 @@ private:
 	ClosingCallback _closingCallback;
 	FocusInCallback _focusInCallback;
 	FocusOutCallback _focusOutCallback;
+	InputDialogRequestedCallback _inputDialogRequestedCallback;
 	std::vector<AutoString> _customSchemeNames;
 	WebResourceRequestedCallback _customSchemeCallback;
 
@@ -272,6 +275,10 @@ public:
 
 	void NavigateToString(AutoString content);
 	void NavigateToUrl(AutoString url);
+	int InvokeInputDialogRequested(int kind, AutoString message, AutoString defaultInput, AutoString response, int responseLength)
+	{
+		return _inputDialogRequestedCallback ? _inputDialogRequestedCallback(kind, message, defaultInput, response, responseLength) : 0;
+	}
 	void Restore(); // required anymore?backward compat?
 	void SendWebMessage(AutoString message);
 
