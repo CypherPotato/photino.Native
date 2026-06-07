@@ -203,6 +203,8 @@ Photino::Photino(PhotinoInitParams* initParams)
 	_focusInCallback = (FocusInCallback)initParams->FocusInHandler;
 	_focusOutCallback = (FocusOutCallback)initParams->FocusOutHandler;
 	_inputDialogRequestedCallback = (InputDialogRequestedCallback)initParams->InputDialogRequestedHandler;
+	_inputDialogInterceptionEnabled = false;
+	_scriptDialogOpeningRegistered = false;
 	_customSchemeCallback = (WebResourceRequestedCallback)initParams->CustomSchemeHandler;
 
 	//copy strings from the fixed size array passed, but only if they have a value.
@@ -735,6 +737,12 @@ void Photino::SetDevToolsEnabled(bool enabled)
 	_webviewWindow->Reload();
 }
 
+void Photino::SetInputDialogInterceptionEnabled(bool enabled)
+{
+	_inputDialogInterceptionEnabled = enabled;
+	UpdateScriptDialogOpeningHandler();
+}
+
 void Photino::SetFullScreen(bool fullScreen)
 {
 	LONG_PTR style = GetWindowLongPtr(_hWnd, GWL_STYLE);
@@ -984,6 +992,82 @@ AutoString Photino::ToUTF16String(AutoString source)
 	return response;
 }
 
+void Photino::UpdateScriptDialogOpeningHandler()
+{
+	if (!_webviewWindow)
+		return;
+
+	wil::com_ptr<ICoreWebView2Settings> Settings;
+	_webviewWindow->get_Settings(Settings.put());
+
+	if (!_inputDialogInterceptionEnabled)
+	{
+		Settings->put_AreDefaultScriptDialogsEnabled(TRUE);
+		if (_scriptDialogOpeningRegistered)
+		{
+			_webviewWindow->remove_ScriptDialogOpening(_scriptDialogOpeningToken);
+			_scriptDialogOpeningRegistered = false;
+			_scriptDialogOpeningToken = {};
+		}
+		return;
+	}
+
+	if (_scriptDialogOpeningRegistered)
+		return;
+
+	Settings->put_AreDefaultScriptDialogsEnabled(FALSE);
+	_webviewWindow->add_ScriptDialogOpening(Callback<ICoreWebView2ScriptDialogOpeningEventHandler>(
+		[&](ICoreWebView2* sender, ICoreWebView2ScriptDialogOpeningEventArgs* args) -> HRESULT {
+			COREWEBVIEW2_SCRIPT_DIALOG_KIND dialogKind;
+			args->get_Kind(&dialogKind);
+
+			int inputDialogKind;
+			switch (dialogKind)
+			{
+				case COREWEBVIEW2_SCRIPT_DIALOG_KIND_ALERT:
+					inputDialogKind = InputDialogKindAlert;
+					break;
+				case COREWEBVIEW2_SCRIPT_DIALOG_KIND_CONFIRM:
+					inputDialogKind = InputDialogKindConfirm;
+					break;
+				case COREWEBVIEW2_SCRIPT_DIALOG_KIND_PROMPT:
+					inputDialogKind = InputDialogKindPrompt;
+					break;
+				default:
+					return S_OK;
+			}
+
+			wil::unique_cotaskmem_string message;
+			args->get_Message(&message);
+
+			wil::unique_cotaskmem_string defaultInput;
+			if (inputDialogKind == InputDialogKindPrompt)
+				args->get_DefaultText(&defaultInput);
+
+			wchar_t response[InputDialogResponseLength] = {};
+			int inputResult = InvokeInputDialogRequested(
+				inputDialogKind,
+				message.get() ? message.get() : L"",
+				defaultInput.get() ? defaultInput.get() : L"",
+				response,
+				InputDialogResponseLength);
+
+			if (!(inputResult & InputDialogResultHandled))
+				return S_OK;
+
+			if (inputDialogKind == InputDialogKindPrompt && !(inputResult & InputDialogResultDismissed))
+				args->put_ResultText(response);
+
+			if (inputDialogKind == InputDialogKindAlert ||
+				(inputDialogKind == InputDialogKindConfirm && !(inputResult & InputDialogResultDismissed) && (inputResult & InputDialogResultConfirmed)) ||
+				(inputDialogKind == InputDialogKindPrompt && !(inputResult & InputDialogResultDismissed)))
+				args->Accept();
+
+			return S_OK;
+		}).Get(), &_scriptDialogOpeningToken);
+	_scriptDialogOpeningRegistered = true;
+}
+
 void Photino::AttachWebView()
 {
 	size_t runtimePathLen = wcsnlen(_webview2RuntimePath, _countof(_webview2RuntimePath));
@@ -1052,56 +1136,7 @@ void Photino::AttachWebView()
 								return S_OK;
 							}).Get(), &webMessageToken);
 
-						EventRegistrationToken scriptDialogOpeningToken;
-						_webviewWindow->add_ScriptDialogOpening(Callback<ICoreWebView2ScriptDialogOpeningEventHandler>(
-							[&](ICoreWebView2* sender, ICoreWebView2ScriptDialogOpeningEventArgs* args) -> HRESULT {
-								COREWEBVIEW2_SCRIPT_DIALOG_KIND dialogKind;
-								args->get_Kind(&dialogKind);
-
-								int inputDialogKind;
-								switch (dialogKind)
-								{
-									case COREWEBVIEW2_SCRIPT_DIALOG_KIND_ALERT:
-										inputDialogKind = InputDialogKindAlert;
-										break;
-									case COREWEBVIEW2_SCRIPT_DIALOG_KIND_CONFIRM:
-										inputDialogKind = InputDialogKindConfirm;
-										break;
-									case COREWEBVIEW2_SCRIPT_DIALOG_KIND_PROMPT:
-										inputDialogKind = InputDialogKindPrompt;
-										break;
-									default:
-										return S_OK;
-								}
-
-								wil::unique_cotaskmem_string message;
-								args->get_Message(&message);
-
-								wil::unique_cotaskmem_string defaultInput;
-								if (inputDialogKind == InputDialogKindPrompt)
-									args->get_DefaultText(&defaultInput);
-
-								wchar_t response[InputDialogResponseLength] = {};
-								int inputResult = InvokeInputDialogRequested(
-									inputDialogKind,
-									message.get() ? message.get() : L"",
-									defaultInput.get() ? defaultInput.get() : L"",
-									response,
-									InputDialogResponseLength);
-
-								if (!(inputResult & InputDialogResultHandled))
-									return S_OK;
-
-								if (inputDialogKind == InputDialogKindPrompt && !(inputResult & InputDialogResultDismissed))
-									args->put_ResultText(response);
-
-								if (inputDialogKind == InputDialogKindAlert ||
-									(inputDialogKind == InputDialogKindConfirm && !(inputResult & InputDialogResultDismissed) && (inputResult & InputDialogResultConfirmed)) ||
-									(inputDialogKind == InputDialogKindPrompt && !(inputResult & InputDialogResultDismissed)))
-									args->Accept();
-
-								return S_OK;
-							}).Get(), &scriptDialogOpeningToken);
+						UpdateScriptDialogOpeningHandler();
 
 						EventRegistrationToken webResourceRequestedToken;
 						_webviewWindow->AddWebResourceRequestedFilter(L"*", COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL);

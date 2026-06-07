@@ -131,6 +131,7 @@ private:
 	FocusInCallback _focusInCallback;
 	FocusOutCallback _focusOutCallback;
 	InputDialogRequestedCallback _inputDialogRequestedCallback;
+	bool _inputDialogInterceptionEnabled;
 	std::vector<AutoString> _customSchemeNames;
 	WebResourceRequestedCallback _customSchemeCallback;
 
@@ -167,9 +168,12 @@ private:
 	wil::com_ptr<ICoreWebView2Environment> _webviewEnvironment;
 	wil::com_ptr<ICoreWebView2> _webviewWindow;
 	wil::com_ptr<ICoreWebView2Controller> _webviewController;
+	EventRegistrationToken _scriptDialogOpeningToken = {};
+	bool _scriptDialogOpeningRegistered;
 	bool EnsureWebViewIsInstalled();
 	bool InstallWebView2();
 	void AttachWebView();
+	void UpdateScriptDialogOpeningHandler();
 	bool ToWide(PhotinoInitParams* params);
 	
 #elif __linux__
@@ -272,6 +276,7 @@ public:
 	void GetTopmost(bool *topmost);
 	void GetZoom(int *zoom);
 	void GetIgnoreCertificateErrorsEnabled(bool* enabled);
+	bool GetInputDialogInterceptionEnabled() { return _inputDialogInterceptionEnabled; }
 
 	void NavigateToString(AutoString content);
 	void NavigateToUrl(AutoString url);
@@ -285,6 +290,7 @@ public:
 	void SetTransparentEnabled(bool enabled);
 	void SetContextMenuEnabled(bool enabled);
 	void SetDevToolsEnabled(bool enabled);
+	void SetInputDialogInterceptionEnabled(bool enabled);
 	void SetIconFile(AutoString filename);
 	void SetFullScreen(bool fullScreen);
 	void SetMaximized(bool maximized);

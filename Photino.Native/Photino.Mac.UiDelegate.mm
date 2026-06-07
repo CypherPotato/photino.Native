@@ -11,7 +11,7 @@ const int InputDialogResponseLength = 32768;
 
 static int InvokeInputDialog(Photino *photino, int kind, NSString *message, NSString *defaultInput, char *response)
 {
-    if (!photino)
+    if (!photino || !photino->GetInputDialogInterceptionEnabled())
         return 0;
 
     response[0] = 0;

@@ -152,6 +152,7 @@ Photino::Photino(PhotinoInitParams *initParams) : _webview(nullptr)
 	_minimizedCallback = (MinimizedCallback)initParams->MinimizedHandler;
 	_restoredCallback = (RestoredCallback)initParams->RestoredHandler;
 	_inputDialogRequestedCallback = (InputDialogRequestedCallback)initParams->InputDialogRequestedHandler;
+	_inputDialogInterceptionEnabled = false;
 	_customSchemeCallback = (WebResourceRequestedCallback)initParams->CustomSchemeHandler;
 
 	// copy strings from the fixed size array passed, but only if they have a value.
@@ -568,7 +569,7 @@ const int InputDialogResponseLength = 32768;
 gboolean HandleScriptDialog(WebKitWebView *webView, WebKitScriptDialog *dialog, gpointer arg)
 {
 	Photino *photino = (Photino *)arg;
-	if (!photino)
+	if (!photino || !photino->GetInputDialogInterceptionEnabled())
 		return FALSE;
 
 	int kind;
@@ -646,6 +647,11 @@ void Photino::SetDevToolsEnabled(bool enabled)
 	_devToolsEnabled = enabled;
 	WebKitSettings *settings = webkit_web_view_get_settings(WEBKIT_WEB_VIEW(_webview));
 	webkit_settings_set_enable_developer_extras(settings, _devToolsEnabled);
+}
+
+void Photino::SetInputDialogInterceptionEnabled(bool enabled)
+{
+	_inputDialogInterceptionEnabled = enabled;
 }
 
 void Photino::SetFullScreen(bool fullScreen)
